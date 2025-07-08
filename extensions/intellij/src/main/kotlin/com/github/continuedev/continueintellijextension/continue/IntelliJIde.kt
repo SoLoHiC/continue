@@ -26,7 +26,6 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
-import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
@@ -53,7 +52,7 @@ class IntelliJIDE(
     init {
         try {
             val os = getOS()
-            
+
             if (os == OS.LINUX || os == OS.MAC) {
                 val file = File(ripgrep)
                 if (!file.canExecute()) {
@@ -341,7 +340,7 @@ class IntelliJIDE(
                 }
 
                 val command = GeneralCommandLine(commandArgs)
-    
+
                 command.setWorkDirectory(project.basePath)
                 val results = ExecUtil.execAndGetOutput(command).stdout
                 return results.split("\n")
@@ -355,11 +354,12 @@ class IntelliJIDE(
             throw NotImplementedError("Ripgrep not supported, this workspace is remote")
         }
     }
+
     override suspend fun getSearchResults(query: String, maxResults: Int?): String {
         val ideInfo = this.getIdeInfo()
         if (ideInfo.remoteName == "local") {
             try {
-                 val commandArgs = mutableListOf(
+                val commandArgs = mutableListOf(
                     ripgrep,
                     "-i",
                     "--ignore-file",
@@ -370,20 +370,20 @@ class IntelliJIDE(
                     "2",
                     "--heading"
                 )
-                
+
                 // Conditionally add maxResults flag
                 if (maxResults != null) {
                     commandArgs.add("-m")
                     commandArgs.add(maxResults.toString())
                 }
-                
+
                 // Add the search query and path
                 commandArgs.add("-e")
                 commandArgs.add(query)
                 commandArgs.add(".")
 
                 val command = GeneralCommandLine(commandArgs)
-    
+
                 command.setWorkDirectory(project.basePath)
                 return ExecUtil.execAndGetOutput(command).stdout
             } catch (exception: Exception) {
@@ -495,7 +495,7 @@ class IntelliJIDE(
 
         // Create the list of IndexTag objects
         return workspaceDirs.mapIndexed { index, directory ->
-            IndexTag(directory, branches[index], artifactId)
+            IndexTag(artifactId, branches[index], directory)
         }
     }
 
