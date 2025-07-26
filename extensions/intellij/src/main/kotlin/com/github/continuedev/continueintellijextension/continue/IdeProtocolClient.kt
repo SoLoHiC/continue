@@ -472,6 +472,24 @@ class IdeProtocolClient(
                         respond(null)
                     }
 
+                    "gotoDefinition" -> {
+                        val params = Gson().fromJson(
+                            dataElement.toString(),
+                            Location::class.java
+                        )
+                        val rangeInFiles = ide.gotoDefinition(params)
+                        respond(rangeInFiles)
+                    }
+
+                    "gotoTypeDefinition" -> {
+                        val params = Gson().fromJson(
+                            dataElement.toString(),
+                            Location::class.java
+                        )
+                        val rangeInFiles = ide.gotoTypeDefinition(params)
+                        respond(rangeInFiles)
+                    }
+
                     else -> {
                         println("Unknown message type: $messageType")
                     }

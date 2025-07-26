@@ -16,6 +16,7 @@ import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
@@ -30,6 +31,8 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiManager
+import com.intellij.psi.PsiReference
 import com.intellij.testFramework.LightVirtualFile
 import kotlinx.coroutines.*
 import org.jetbrains.plugins.terminal.ShellTerminalWidget
@@ -51,6 +54,8 @@ class IntelliJIDE(
     private val gitService = GitService(project, continuePluginService)
 
     private val ripgrep: String = getRipgrepPath()
+
+    private var editorChangeListener: Disposable? = null
 
     init {
         try {
@@ -677,11 +682,92 @@ class IntelliJIDE(
     }
 
     override suspend fun gotoDefinition(location: Location): List<RangeInFile> {
-        throw NotImplementedError("gotoDefinition not implemented yet")
+        return withContext(Dispatchers.EDT) {
+            try {
+                val virtualFile =
+                    LocalFileSystem.getInstance().findFileByPath(UriUtils.parseUri(location.filepath).path)
+                        ?: return@withContext emptyList()
+
+                val psiFile = PsiManager.getInstance(project).findFile(virtualFile)
+                    ?: return@withContext emptyList()
+
+                val document = FileDocumentManager.getInstance().getDocument(virtualFile)
+                    ?: return@withContext emptyList()
+
+                // Adjusted for `Location` with `line` and `character` properties
+                val offset = document.getLineStartOffset(location.position.line) + location.position.character
+                val element = psiFile.findElementAt(offset) ?: return@withContext emptyList()
+
+                // Resolve the reference or get the definition
+                val resolvedElement = when (element) {
+                    is PsiReference -> element.resolve()
+                    else -> element
+                } ?: return@withContext emptyList()
+
+                // Get the text range of the resolved element
+                val textRange = resolvedElement.textRange
+                val startLine = document.getLineNumber(textRange.startOffset)
+                val startChar = textRange.startOffset - document.getLineStartOffset(startLine)
+                val endLine = document.getLineNumber(textRange.endOffset)
+                val endChar = textRange.endOffset - document.getLineStartOffset(endLine)
+
+                listOf(
+                    RangeInFile(
+                        filepath = location.filepath,
+                        range = Range(
+                            start = Position(line = startLine, character = startChar),
+                            end = Position(line = endLine, character = endChar)
+                        )
+                    )
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptyList()
+            }
+        }
     }
 
     override suspend fun gotoTypeDefinition(location: Location): List<RangeInFile> {
-        throw NotImplementedError("gotoTypeDefinition not implemented yet")
+        return withContext(Dispatchers.EDT) {
+            try {
+                val virtualFile =
+                    LocalFileSystem.getInstance().findFileByPath(UriUtils.parseUri(location.filepath).path)
+                        ?: return@withContext emptyList()
+
+                val psiFile = PsiManager.getInstance(project).findFile(virtualFile)
+                    ?: return@withContext emptyList()
+
+                val document = FileDocumentManager.getInstance().getDocument(virtualFile)
+                    ?: return@withContext emptyList()
+
+                // Calculate the offset from the location's position
+                val offset = document.getLineStartOffset(location.position.line) + location.position.character
+                val element = psiFile.findElementAt(offset) ?: return@withContext emptyList()
+
+                // Resolve the type definition (fallback to the resolved element if type cannot be determined)
+                val resolvedElement = (element as? PsiReference)?.resolve() ?: element
+
+                // Get the text range of the resolved type definition
+                val textRange = resolvedElement.textRange
+                val startLine = document.getLineNumber(textRange.startOffset)
+                val startChar = textRange.startOffset - document.getLineStartOffset(startLine)
+                val endLine = document.getLineNumber(textRange.endOffset)
+                val endChar = textRange.endOffset - document.getLineStartOffset(endLine)
+
+                listOf(
+                    RangeInFile(
+                        filepath = location.filepath,
+                        range = Range(
+                            start = Position(line = startLine, character = startChar),
+                            end = Position(line = endLine, character = endChar)
+                        )
+                    )
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptyList()
+            }
+        }
     }
 
     override suspend fun getSignatureHelp(location: Location): SignatureHelp? {
